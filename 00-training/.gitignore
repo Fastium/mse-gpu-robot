@@ -1,3 +1,11 @@
-torch
-torchvision
-tensorboard
+*.pyc
+*.pth.tar
+*.onnx
+*.engine
+*.jpg
+*.png
+cat_dog*
+plants*
+data/
+models/
+logs/
