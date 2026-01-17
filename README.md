@@ -26,6 +26,12 @@ To train different models there is a bash script `train-model.sh` that produce a
 ```bash
 ./00-training/train-model.sh
 ```
+
+We can vizualize the training process with TensorBoard:
+```bash
+tensorboard --logdir=./models
+```
+
 ## Local inference
 
 
