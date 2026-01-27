@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 
 # Configuration
-DATA_DIR = "./data/robot/"
+DATA_DIR = "./data/"
 SOURCE_DIRS = ["cible", "nocible"]
 DEST_DIRS = ["train", "val", "test"]
 SPLIT_RATIOS = {"train": 0.70, "val": 0.15, "test": 0.15}
