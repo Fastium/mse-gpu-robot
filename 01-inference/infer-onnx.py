@@ -17,14 +17,15 @@ providers = ["CUDAExecutionProvider"]
 #file onnx
 # model = "models/mobilenet_v2/mobilenet_v2.onnx"
 # model = "models/mobilenet_v3_small/mobilenet_v3_small.onnx"
-model = "models/resnet18/resnet18.onnx"
+# model = "../models/resnet18/resnet18-cbi.onnx"
+model = "../models/resnet18-gemini.onnx"
 #sepecifier le nombre de classes
 num_classes = 2
 # create ONNX session using CUDA
 ort_sess = ort.InferenceSession(model, providers = providers)
 
 # image = Image.open("data/cible/Image_2025_0005_10_cible .jpg")
-image = Image.open("data/nocible/Image_2025_0005_28_nocible.jpg")
+image = Image.open("../data/nocible/Image_2025_0005_28_nocible.jpg")
 # adapter l’image pour la rendre compatible avec ce qu’attends l’entrée du modèle
 transform = default_transform() #voir annexe
 # transform image into tensor

@@ -2,7 +2,7 @@
 
 # Configuration
 PYTHON_CMD="../.venv/bin/python"
-DATA_DIR="../data/robot/"
+DATA_DIR="../data/"
 GPU_ID=0
 
 # ==============================================================================
@@ -63,7 +63,7 @@ for ARCH in "${ARCHITECTURES[@]}"; do
                 ((current_exp++))
 
                 # Generate a unique output directory name
-                OUTPUT_DIR="../models/robot/${ARCH}_b${BATCH}_lr${LR}_e${EPOCHS}"
+                OUTPUT_DIR="../models/${ARCH}_b${BATCH}_lr${LR}_e${EPOCHS}"
 
                 echo ""
                 echo "------------------------------------------------------------------"
@@ -74,7 +74,7 @@ for ARCH in "${ARCHITECTURES[@]}"; do
 
                 mkdir -p "$OUTPUT_DIR"
 
-                $PYTHON_CMD train.py \
+                $PYTHON_CMD trainCBI.py \
                     "$DATA_DIR" \
                     --model-dir="$OUTPUT_DIR" \
                     --batch-size=$BATCH \
