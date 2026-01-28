@@ -13,31 +13,34 @@ GPU_ID=0
 
 # List of architectures
 ARCHITECTURES=(
-    "mobilenet_v3_small"
+    # "mobilenet_v3_small"
     "resnet18"
-    "efficientnet_b0"
+    # "efficientnet_b0"
     "mobilenet_v2"
-    "resnet34"
+    # "resnet34"
 )
 
 # List of batch sizes
 BATCH_SIZES=(
     16
     32
-    64
+    # 64
 )
 
 # List of learning rates
 LEARNING_RATES=(
-    0.1
+    # 0.1
     0.01
     0.001
-    0.0001
+    # 0.0001
 )
 
 # List of epochs
 EPOCHS_LIST=(
+    30
+    40
     50
+    60
 )
 
 # ==============================================================================
