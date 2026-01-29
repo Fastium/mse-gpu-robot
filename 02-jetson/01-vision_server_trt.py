@@ -11,9 +11,12 @@ from jetcam.csi_camera import CSICamera
 # --- CONFIGURATION ---
 ZMQ_PORT = 5555
 # We load the TRT optimized model, not the original PyTorch one
-# MODEL_PATH = "../models/resnet18_trt.pth"
-MODEL_PATH = "../models/mobilenet_v2_trt.pth"
+MODEL_PATH = "../models/mobilenet_v2_b16_lr0.001_e40_trt.pth"
 DEVICE = torch.device("cuda")
+
+CAM_WIDTH = 320
+CAM_HEIGHT = 224
+MODEL_INPUT_SIZE = 224
 
 print(f"[Init] Device selected: {DEVICE}")
 
@@ -47,7 +50,7 @@ def main():
     # 2. Setup Camera
     print("[Camera] Initializing CSI Camera...")
     try:
-        camera = CSICamera(width=224, height=224, capture_width=1080, capture_height=720, capture_fps=30)
+        camera = CSICamera(width=CAM_WIDTH, height=CAM_HEIGHT, capture_width=1280, capture_height=720, capture_fps=30)
         camera.running = True
         print("[Camera] Ready.")
     except Exception as e:
@@ -58,9 +61,15 @@ def main():
     model = get_model()
     preprocess = get_transform()
 
-    print("[System] Starting High-Performance Loop...")
+    print("[System] Starting Multi-Crop Loop...")
 
     last_time = time.time()
+
+    crops_x = {
+        "left": 0,
+        "center": 48,
+        "right": 96
+    }
 
     try:
         while True:
@@ -74,24 +83,43 @@ def main():
             last_time = curr_time
             fps = 1.0 / dt if dt > 0 else 0
 
+            # --- PREP CROPS ---
+            # Prepare the inputs
+            batch_tensors = []
+
+            # Note: image is in HWC format (Height, Width, Channel)
+            # Cut out the 3 zones
+            img_left = image[:, crops_x["left"]:crops_x["left"]+MODEL_INPUT_SIZE]
+            img_center = image[:, crops_x["center"]:crops_x["center"]+MODEL_INPUT_SIZE]
+            img_right = image[:, crops_x["right"]:crops_x["right"]+MODEL_INPUT_SIZE]
+
+            # Transform into tensors
+            tensors = []
+            for img_crop in [img_left, img_center, img_right]:
+                pil_img = transforms.ToPILImage()(img_crop)
+                tensors.append(preprocess(pil_img).unsqueeze(0).to(DEVICE))
+
             # --- INFERENCE ---
-            image_pil = transforms.ToPILImage()(image)
-            input_tensor = preprocess(image_pil).unsqueeze(0).to(DEVICE)
+            # To avoid breaking the TRT engine (often compiled with batch_size=1),
+            # we do 3 sequential passes. This is safe and fast on Nano.
+            probs_map = {}
+            keys = ["left", "center", "right"]
 
-            # TensorRT Execution (As simple as calling the original model)
-            output = model(input_tensor)
-
-            # Post-process (Softmax) - Output is a standard Torch tensor
-            # Note: TRT output might not be named, simply get index 0
-            probs = torch.nn.functional.softmax(output, dim=1).cpu().numpy()[0]
+            for i, input_tensor in enumerate(tensors):
+                output = model(input_tensor)
+                prob = torch.nn.functional.softmax(output, dim=1).cpu().numpy()[0][0] # Index 0 = Target? Check your index!
+                # WARNING: If your model outputs [NoTarget, Target], then target prob is index 1.
+                # I assume index 0 here based on your previous script, but verify this.
+                probs_map[keys[i]] = float(prob)
 
             # --- PUBLISH ---
-            # Compress to JPEG
+            # Send the complete LARGE image for the viewer
             _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
             jpg_as_text = base64.b64encode(buffer).decode('utf-8')
 
             payload = {
-                "prob_target": float(probs[0]),
+                "probs": probs_map, # Ex: {"left": 0.1, "center": 0.9, "right": 0.2}
+                "prob_target": float(probs_map["center"]),
                 "image_b64": jpg_as_text,
                 "jetson_fps": float(fps)
             }

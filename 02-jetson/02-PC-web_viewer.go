@@ -20,10 +20,16 @@ import (
 
 // --- CONFIGURATION ---
 const (
-	JetsonIP   = "192.168.37.22"
-	ZmqPort    = "5555"
-	DatasetDir = "dataset_capture"
-	Threshold  = 0.70
+	JetsonIP     = "192.168.37.22"
+	ZmqPort      = "5555"
+	DatasetDir   = "dataset_capture"
+	Threshold    = 0.70
+	CamWidth     = 320
+	CamHeight    = 224
+	CropSize     = 224
+	OffsetLeft   = 0
+	OffsetCenter = 48
+	OffsetRight  = 95
 )
 
 // --- GLOBAL STATE ---
@@ -38,9 +44,9 @@ var (
 
 // Data structure matches the JSON sent by Jetson
 type VisionData struct {
-	ProbTarget float64 `json:"prob_target"`
-	ImageB64   string  `json:"image_b64"`
-	FPS        float64 `json:"jetson_fps"`
+	Probs    map[string]float64 `json:"probs"` // "left", "center", "right"
+	ImageB64 string             `json:"image_b64"`
+	FPS      float64            `json:"jetson_fps"`
 }
 
 // HTML Interface
@@ -133,12 +139,18 @@ func zmqLoop() {
 	filename := fmt.Sprintf("recording_%s.avi", timestamp)
 
 	// MJPG is a safe bet for AVI container without complex codec installs
-	writer, err := gocv.VideoWriterFile(filename, "MJPG", 20, 224, 224, true)
+	writer, err := gocv.VideoWriterFile(filename, "MJPG", 20, CamWidth, CamHeight, true)
 	if err != nil {
 		fmt.Printf("[Error] Could not open video writer: %v\n", err)
 	} else {
 		fmt.Printf("[Record] Saving video to %s\n", filename)
 		defer writer.Close()
+	}
+
+	offsets := map[string]int{
+		"left":   OffsetLeft,
+		"center": OffsetCenter,
+		"right":  OffsetRight,
 	}
 
 	for {
@@ -177,25 +189,37 @@ func zmqLoop() {
 		var rectCol color.RGBA
 		// var textCol color.RGBA
 
-		if data.ProbTarget > Threshold {
-			label = fmt.Sprintf("CIBLE:%.0f%%", data.ProbTarget*100)
-			// textCol = color.RGBA{0, 255, 0, 0} // Green Text
-			rectCol = color.RGBA{0, 50, 0, 0} // Dark Green BG
-		} else {
-			label = fmt.Sprintf("NOCIBLE:%.0f%%", data.ProbTarget*100)
-			// textCol = color.RGBA{0, 0, 255, 0} // Red Text
-			rectCol = color.RGBA{0, 0, 50, 0} // Dark Red BG
+		// Draw Top Bar Background
+		gocv.Rectangle(&img, image.Rect(0, 0, CamWidth, 20), rectCol, -1)
+
+		for zone, prob := range data.Probs {
+			xStart := offsets[zone]
+
+			// Color: Green if detected, Grey otherwise
+			var rectCol color.RGBA
+			thickness := 1
+
+			if prob > 0.60 { // Visual threshold
+				rectCol = color.RGBA{0, 255, 0, 0} // Bright green
+				thickness = 1
+			} else {
+				rectCol = color.RGBA{100, 100, 100, 0} // Discreet grey
+			}
+
+			// Draw the zone frame
+			rect := image.Rect(xStart, 20, xStart+CropSize, CamHeight-thickness)
+			gocv.Rectangle(&img, rect, rectCol, thickness)
+
+			// Small text with probability at the top of the zone
+			label := fmt.Sprintf("%.0f%%", prob*100)
+			gocv.PutText(&img, label, image.Pt(xStart+5, 15), gocv.FontHersheySimplex, 0.4, rectCol, 1)
 		}
 
-		// Draw Top Bar Background
-		gocv.Rectangle(&img, image.Rect(0, 0, 224, 20), rectCol, -1)
-
 		// Draw Labels
-		// FONT_HERSHEY_SIMPLEX ensures the ":" renders correctly
 		gocv.PutText(&img, label, image.Pt(5, 15), gocv.FontHersheySimplex, 0.4, color.RGBA{200, 200, 200, 0}, 1)
 
 		fpsText := fmt.Sprintf("FPS:%.1f", data.FPS)
-		gocv.PutText(&img, fpsText, image.Pt(150, 15), gocv.FontHersheySimplex, 0.4, color.RGBA{200, 200, 200, 0}, 1)
+		gocv.PutText(&img, fpsText, image.Pt(CamWidth-74, 15), gocv.FontHersheySimplex, 0.4, color.RGBA{200, 200, 200, 0}, 1)
 
 		// 3. Write Frame to Video File
 		if writer.IsOpened() {
