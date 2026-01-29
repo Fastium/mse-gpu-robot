@@ -3,6 +3,16 @@ import torchvision.models as models
 import torchvision.transforms as transforms
 from PIL import Image
 
+# =======================
+# CONFIGURATION
+# =======================
+MODEL_NAME = "mobilenet_v2"
+IMAGE_PATH = "../data/cible/Image_2025_0005_10_cible.jpg"
+NUM_CLASSES = 2
+# =======================
+CHECKPOINT_PATH = f"../models/{MODEL_NAME}/model_best.pth.tar"
+# =======================
+
 def default_transform(resolution=(224, 224)):
     return transforms.Compose([
         transforms.Resize(resolution),  # change resolution sans deformation
@@ -14,22 +24,17 @@ def default_transform(resolution=(224, 224)):
 # Device configuration
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-# Model configuration
-model_name = "resnet18"
-num_classes = 2
-
 # Load model architecture
-model = models.__dict__[model_name](weights=None)
+model = models.__dict__[MODEL_NAME](weights=None)
 
 # Modify the last layer to match number of classes
 if hasattr(model, 'fc'):
-    model.fc = torch.nn.Linear(model.fc.in_features, num_classes)
+    model.fc = torch.nn.Linear(model.fc.in_features, NUM_CLASSES)
 elif hasattr(model, 'classifier'):
-    model.classifier[-1] = torch.nn.Linear(model.classifier[-1].in_features, num_classes)
+    model.classifier[-1] = torch.nn.Linear(model.classifier[-1].in_features, NUM_CLASSES)
 
 # Load trained checkpoint
-checkpoint_path = "models/resnet18/model_best.pth.tar"
-checkpoint = torch.load(checkpoint_path, map_location=device)
+checkpoint = torch.load(CHECKPOINT_PATH, map_location=device)
 
 # Handle checkpoint format (either state_dict directly or wrapped in 'state_dict' key)
 if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
@@ -42,8 +47,7 @@ model = model.to(device)
 model.eval()
 
 # Load image
-image = Image.open("data/cible/Image_2025_0005_10_cible .jpg")
-# image = Image.open("data/nocible/Image_2025_0005_28_nocible.jpg")
+image = Image.open(IMAGE_PATH)
 
 # Prepare image for model
 transform = default_transform()
@@ -58,9 +62,11 @@ with torch.no_grad():
     # Apply softmax to get probabilities
     probas = torch.softmax(output, dim=1)[0].tolist()
 
-# Print probabilities
-print(probas)
+#check somme proba quasi 1
+assert abs(1 - sum(probas)) < 0.0001
 
-# Check that probabilities sum to ~1
-assert abs(1 - sum(probas)) < 0.0001, f"Probabilities don't sum to 1: {sum(probas)}"
-print(f"Inference successful! Probabilities sum to: {sum(probas)}")
+# Print probabilities with labels
+print("-" * 30)
+print(f"Target:     {probas[0]*100:.2f}%")
+print(f"Not Target: {probas[1]*100:.2f}%")
+print("-" * 30)

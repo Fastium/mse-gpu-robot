@@ -4,6 +4,16 @@ import torchvision.transforms as transforms
 import numpy as np
 from PIL import Image
 
+# =======================
+# CONFIGURATION
+# =======================
+MODEL_NAME = "mobilenet_v2"
+IMAGE_PATH = "../data/cible/Image_2025_0005_10_cible.jpg"
+NUM_CLASSES = 2
+# =======================
+ONNX_MODEL_PATH = f"../models/{MODEL_NAME}/{MODEL_NAME}.onnx"
+# =======================
+
 def default_transform(resolution=(224,224)):
     return transforms.Compose([
         transforms.Resize(resolution),  #change resolution sans deformation
@@ -14,18 +24,11 @@ def default_transform(resolution=(224,224)):
 
 providers = ["CUDAExecutionProvider"]
 
-#file onnx
-# model = "models/mobilenet_v2/mobilenet_v2.onnx"
-# model = "models/mobilenet_v3_small/mobilenet_v3_small.onnx"
-# model = "../models/resnet18/resnet18-cbi.onnx"
-model = "../models/resnet18-gemini.onnx"
-#sepecifier le nombre de classes
-num_classes = 2
 # create ONNX session using CUDA
-ort_sess = ort.InferenceSession(model, providers = providers)
+ort_sess = ort.InferenceSession(ONNX_MODEL_PATH, providers = providers)
 
-# image = Image.open("data/cible/Image_2025_0005_10_cible .jpg")
-image = Image.open("../data/nocible/Image_2025_0005_28_nocible.jpg")
+# Load image
+image = Image.open(IMAGE_PATH)
 # adapter l’image pour la rendre compatible avec ce qu’attends l’entrée du modèle
 transform = default_transform() #voir annexe
 # transform image into tensor
@@ -46,7 +49,7 @@ io_binding.bind_input(
 )
 
 # create a tensor for the output on the device
-output_tensor = torch.empty((1, num_classes), dtype = torch.float32, device =
+output_tensor = torch.empty((1, NUM_CLASSES), dtype = torch.float32, device =
 "cuda:0").contiguous()
 # bind the output to the model
 io_binding.bind_output(
@@ -61,7 +64,14 @@ io_binding.bind_output(
 ort_sess.run_with_iobinding(io_binding)
 #recupération des probas cotés host
 probas = output_tensor.to("cpu")[0].tolist()
-#print proba
-print(probas)
+
 #check somme proba quasi 1
 assert abs(1 - sum(probas)) < 0.0001
+
+# Print probabilities with labels
+print("-" * 30)
+print(f"Target:     {probas[0]*100:.2f}%")
+print(f"Not Target: {probas[1]*100:.2f}%")
+print("-" * 30)
+
+

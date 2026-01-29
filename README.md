@@ -18,6 +18,7 @@ uv pip install -r requirements.txt
 ## Training
 Copy the data (robot.zip) in the data folder and decompress it. Then run our script:
 ```bash
+cd data
 python splitTrainTestVal.py
 ```
 It creates the folders `train/` and `val/` with the corresponding images for the training script `trainCBI.py`.
@@ -35,6 +36,72 @@ tensorboard --logdir=./models
 ```
 
 ## Local inference
+
+### Pytorch model
+
+To perform local inference, navigate to the `01-inference/` folder and use the `infer-pytorch.py` script.
+
+You can configure the inference parameters (model name, image path, etc.) at the top of the file:
+
+```python
+# =======================
+# CONFIGURATION
+# =======================
+MODEL_NAME = "mobilenet_v2"
+IMAGE_PATH = "../data/cible/Image_2025_0005_10_cible.jpg"
+NUM_CLASSES = 2
+# =======================
+```
+
+Then run the script:
+```bash
+cd 01-inference
+python infer-pytorch.py
+``` 
+
+### ONNX Model
+
+First, ensure you have the onnx requirements installed:
+```bash
+uv pip install -r 01-inference/requirements-onnx.txt
+```
+
+#### 1. Export PyTorch model to ONNX
+
+Use the export script to convert your trained PyTorch model.
+```bash
+python 00-training/onnx_export.py --model-dir models/<model_name>
+```
+
+#### 2. Validate the ONNX model
+
+Check if the exported model is valid.
+```bash
+python 00-training/onnx_validate.py models/<model_name>/<model_name>.onnx
+```
+
+#### 3. Run Inference
+
+To perform local inference with ONNX, navigate to the `01-inference/` folder and use the `infer-onnx.py` script.
+
+You can configure the inference parameters at the top of the file:
+
+```python
+# =======================
+# CONFIGURATION
+# =======================
+MODEL_NAME = "mobilenet_v2"
+IMAGE_PATH = "../data/cible/Image_2025_0005_10_cible.jpg"
+NUM_CLASSES = 2
+# =======================
+```
+
+Then run the script:
+```bash
+cd 01-inference
+python infer-onnx.py
+```
+
 
 ## Evaluation
 There is a jupyter notebook `metrics.ipynb` which produce every plots for batch of training. And there is a possibility to compare every batch training themselves.
