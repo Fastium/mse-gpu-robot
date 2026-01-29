@@ -40,8 +40,8 @@ It creates the folders `train/` and `val/` with the corresponding images for the
 To train different models there is a bash script `train-model.sh` that produce all necessary files for evaluation and checkpoints. All models are saved in the `models/` folder.
 ```bash
 cd 00-training
-./train-model.sh // multi model training
-./train-one-model.sh
+./train-model.sh // multi model training not usefull simple testing
+./train-specific-model.sh // run this one for specific model training
 ```
 
 We can vizualize the training process with TensorBoard:
@@ -141,13 +141,14 @@ The system utilizes a **Micro-services architecture** powered by **ZeroMQ (ZMQ)*
     * In every iteration, it captures a frame, preprocesses it, runs the inference, and calculates the **real-time internal FPS**.
     * It broadcasts the results (Target Probability, System FPS, and the compressed image) to the local network via port `5555`.
 
-#### `02-PC-web_viewer.py` (Runs on: **Laptop**)
+#### `02-PC-web_viewer.go` (Runs on: **Laptop**)
 * **Role:** **Telemetry & Recording**.
 * **Details:** Running visualization on the Jetson consumes CPU cycles needed for AI. This script offloads that work to your laptop.
 * **Workflow:**
     * It connects to the Jetson over Wi-Fi.
     * It decodes the incoming JPEG stream.
     * It draws the HUD overlay (Target Confidence + Inference FPS) and records the session to an `.avi` file on your laptop's disk.
+    * It also possible to save actual image on your laptop by pressing the space bar
 
 #### `03-control.py` (Runs on: **Jetson**)
 * **Role:** The **Logic Controller**.
@@ -160,11 +161,23 @@ The system utilizes a **Micro-services architecture** powered by **ZeroMQ (ZMQ)*
 
 ### Setup & Usage
 
+#### Step 0 (optionnal): Convert PyTorch model to TensorRT
+To optimize performance on the Jetson, convert your PyTorch model to TensorRT format using the provided script:
+```bash
+# On the Jetson
+python3 00-convert_resnest18.py # For Resnet model
+python3 00-convert_mobilenet.py # For Mobilenet model
+```
+
 #### Step 1: Start the Vision Engine (Jetson)
 This process initializes the AI. It takes a moment to warm up.
 ```bash
 # On the Jetson
-python3 01-vision_server.py
+python3 01-vision_server-resnet.py # For resnet model
+python3 01-vision_server-mobilenet.py # For mobilenet model
+
+# Or for a converted TensorRT model
+python3 01-vision_server_trt_.py
 ```
 Wait for the message: [System] Inference Loop Started.
 
@@ -172,11 +185,11 @@ Wait for the message: [System] Inference Loop Started.
 
 Verify the video feed and telemetry before enabling motors.
 
-1. Open web_viewer_pc_final.py and set JETSON_IP = "192.168.1.XX".
+1. Open web_viewer_pc_final.py and set JETSON_IP = "192.168.XX.XX".
 2. Run the script:
-  ```Bash
+  ```bash
   # On the Laptop
-  python 02-PC-web_viewer.py
+  go run 02-PC-web_viewer.go
   ```
   Open your browser to http://localhost:5000.
 
@@ -185,5 +198,6 @@ Verify the video feed and telemetry before enabling motors.
 Once the vision is stable, launch the control logic in a separate terminal.
 ```bash
 # On the Jetson (New Terminal)
-python3 control.py
+python3 control.py # For first use case
+python3 control-class.py # For second use case
 ```
