@@ -5,8 +5,9 @@ import sys
 
 # --- CONFIG ---
 ZMQ_PORT = 5555
-THRESHOLD = 0.70
-SPEED_NORMAL = 0.13
+THRESHOLD_CIBLE = 0.70
+THRESHOLD_NOCIBLE = 0.40
+SPEED_NORMAL = 0.14
 
 # Setup Car
 car = NvidiaRacecar()
@@ -36,13 +37,9 @@ def main():
         # 2. Your Logic
         print(f"Target Probability: {prob:.4f}", end="\r")
 
-        if prob > 0.7:
-            # Target detected logic
-            # Example: Stop
+        if prob > THRESHOLD_CIBLE:
             car.throttle = 0.0
-            # Example: Or slow down tracking logic here
-        elif prob < 0.4:
-            # Cruise logic
+        elif prob < THRESHOLD_NOCIBLE:
             car.throttle = SPEED_NORMAL
 
 if __name__ == "__main__":
