@@ -1,0 +1,2 @@
+onnxscript
+onnxruntime-gpu
