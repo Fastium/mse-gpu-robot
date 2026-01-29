@@ -15,8 +15,8 @@ CHECKPOINT_PATH = f"../models/{MODEL_NAME}/model_best.pth.tar"
 
 def default_transform(resolution=(224, 224)):
     return transforms.Compose([
-        transforms.Resize(resolution),  # change resolution sans deformation
-        transforms.CenterCrop(resolution),  # crop le côter resté trop grand
+        transforms.Resize(resolution),  # change resolution without deformation
+        transforms.CenterCrop(resolution),  # crop the remaining side
         transforms.ToTensor(),  # Convert the image to a float-tensor
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize the colors
     ])
@@ -62,7 +62,7 @@ with torch.no_grad():
     # Apply softmax to get probabilities
     probas = torch.softmax(output, dim=1)[0].tolist()
 
-#check somme proba quasi 1
+# Check that probabilities sum to approximately 1
 assert abs(1 - sum(probas)) < 0.0001
 
 # Print probabilities with labels

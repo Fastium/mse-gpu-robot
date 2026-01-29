@@ -16,8 +16,8 @@ ONNX_MODEL_PATH = f"../models/{MODEL_NAME}/{MODEL_NAME}.onnx"
 
 def default_transform(resolution=(224,224)):
     return transforms.Compose([
-        transforms.Resize(resolution),  #change resolution sans deformation
-    	transforms.CenterCrop(resolution),#crop le côter resté trop grand
+        transforms.Resize(resolution),  # change resolution without deformation
+    	transforms.CenterCrop(resolution),# crop the remaining side
         transforms.ToTensor(),          # Convert the image to a float-tensor
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize the colors
     ])
@@ -29,8 +29,8 @@ ort_sess = ort.InferenceSession(ONNX_MODEL_PATH, providers = providers)
 
 # Load image
 image = Image.open(IMAGE_PATH)
-# adapter l’image pour la rendre compatible avec ce qu’attends l’entrée du modèle
-transform = default_transform() #voir annexe
+# adapt the image to make it compatible with the model input
+transform = default_transform()
 # transform image into tensor
 input_tensor = transform(image)
 # change shape of tensor and transfer it to the device
@@ -62,10 +62,11 @@ io_binding.bind_output(
 )
 
 ort_sess.run_with_iobinding(io_binding)
-#recupération des probas cotés host
+
+# Get probabilities from output tensor
 probas = output_tensor.to("cpu")[0].tolist()
 
-#check somme proba quasi 1
+# check probability sum is almost 1
 assert abs(1 - sum(probas)) < 0.0001
 
 # Print probabilities with labels
