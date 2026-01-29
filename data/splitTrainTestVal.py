@@ -7,15 +7,15 @@ from pathlib import Path
 DATA_DIR = "./"
 SOURCE_DIRS = ["cible", "nocible"]
 DEST_DIRS = ["train", "val", "test"]
-SPLIT_RATIOS = {"train": 0.80, "val": 0.20}
+SPLIT_RATIOS = {"train": 0.80, "val": 0.20, "test": 0.0}
 
 
 def balance_data():
-    """Equilibre le nombre d'images entre cible et nocible en supprimant aléatoirement les images excédentaires"""
+    """Balances the number of images between cible and nocible by randomly removing excess images"""
     cible_dir = os.path.join(DATA_DIR, "cible")
     nocible_dir = os.path.join(DATA_DIR, "nocible")
 
-    # Compte les images dans chaque dossier
+    # Count images in each folder
     cible_files = [
         f for f in os.listdir(cible_dir)
         if os.path.isfile(os.path.join(cible_dir, f))
@@ -29,13 +29,13 @@ def balance_data():
     cible_count = len(cible_files)
     nocible_count = len(nocible_files)
 
-    print(f"Images avant équilibrage: cible={cible_count}, nocible={nocible_count}")
+    print(f"Images before balancing: cible={cible_count}, nocible={nocible_count}")
 
     if cible_count == nocible_count:
-        print("Les données sont déjà équilibrées!")
+        print("Data is already balanced!")
         return
 
-    # Détermine quel dossier a plus d'images
+    # Determine which folder has more images
     if cible_count > nocible_count:
         larger_dir = cible_dir
         larger_files = cible_files
@@ -47,62 +47,62 @@ def balance_data():
         target_count = cible_count
         larger_name = "nocible"
 
-    # Mélange aléatoirement et sélectionne les fichiers à supprimer
+    # Randomly shuffle and select files to remove
     random.shuffle(larger_files)
     files_to_remove = larger_files[target_count:]
 
-    # Supprime les fichiers excédentaires
+    # Remove excess files
     for filename in files_to_remove:
         file_path = os.path.join(larger_dir, filename)
         os.remove(file_path)
 
-    print(f"Supprimé {len(files_to_remove)} images de '{larger_name}'")
-    print(f"Images après équilibrage: cible={target_count}, nocible={target_count}")
+    print(f"Removed {len(files_to_remove)} images from '{larger_name}'")
+    print(f"Images after balancing: cible={target_count}, nocible={target_count}")
 
 
 def create_directory_structure():
-    """Crée la structure de répertoires train/val/test avec cible/nocible"""
+    """Creates the train/val/test directory structure with cible/nocible"""
     for dest in DEST_DIRS:
         for source in SOURCE_DIRS:
             os.makedirs(os.path.join(DATA_DIR, dest, source), exist_ok=True)
 
 
 def split_dataset():
-    """Répartit les images entre train/val/test selon les ratios définis"""
+    """Splits images between train/val/test according to defined ratios"""
     for source_dir in SOURCE_DIRS:
         full_source_dir = os.path.join(DATA_DIR, source_dir)
         if not os.path.exists(full_source_dir):
-            print(f"Attention: Le dossier {full_source_dir} n'existe pas")
+            print(f"Warning: Folder {full_source_dir} does not exist")
             continue
 
-        # Récupère tous les fichiers
+        # Get all files
         files = [
             f
             for f in os.listdir(full_source_dir)
             if os.path.isfile(os.path.join(full_source_dir, f))
         ]
 
-        # Mélange aléatoirement
+        # Randomly shuffle
         random.shuffle(files)
 
         total = len(files)
         train_end = int(total * SPLIT_RATIOS["train"])
         val_end = train_end + int(total * SPLIT_RATIOS["val"])
 
-        # Répartition des fichiers (exclusifs)
+        # File distribution (exclusive)
         splits = {
             "train": files[:train_end],
             "val": files[train_end:val_end],
             "test": files[val_end:],
         }
 
-        # Création de liens symboliques au lieu de déplacement
+        # Create symbolic links instead of moving files
         for split_name, file_list in splits.items():
             for filename in file_list:
                 src = os.path.abspath(os.path.join(full_source_dir, filename))
                 dst = os.path.join(DATA_DIR, split_name, source_dir, filename)
 
-                # Suppression du lien existant si nécessaire pour éviter les erreurs
+                # Remove existing link if necessary to avoid errors
                 if os.path.lexists(dst):
                     os.remove(dst)
 
@@ -114,15 +114,15 @@ def split_dataset():
 
 
 if __name__ == "__main__":
-    random.seed(42)  # Pour reproductibilité
+    random.seed(42)  # For reproducibility
 
-    print("Équilibrage des données...")
+    print("Balancing data...")
     balance_data()
 
-    print("\nCréation de la structure de répertoires...")
+    print("\nCreating directory structure...")
     create_directory_structure()
 
-    print("Répartition des données...")
+    print("Splitting dataset...")
     split_dataset()
 
-    print("\nTerminé!")
+    print("\nDone!")
