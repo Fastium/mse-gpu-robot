@@ -1,24 +1,40 @@
-# convert_to_trt.py
 import torch
 from torch2trt import torch2trt
-from torchvision.models import resnet18
+from torchvision.models import MobileNetV2
 import torch.nn as nn
 import time
 
+from torch2trt import tensorrt_converter, get_arg
+import tensorrt as trt
+
 # --- CONFIG ---
-INPUT_MODEL = "../models/resnet18.pth.tar"
-OUTPUT_TRT = "../models/resnet18_trt.pth"
+INPUT_MODEL = "../models/mobilenet_v2.pth.tar"
+OUTPUT_TRT = "../models/mobilenet_v2_trt.pth"
 NUM_CLASSES = 2
 DEVICE = torch.device('cuda')
 
-print(f"[Init] Loading PyTorch model from {INPUT_MODEL}...")
+@tensorrt_converter('torch.nn.functional.hardtanh')
+def convert_hardtanh(ctx):
+    input = get_arg(ctx, 'input', pos=0, default=None)
+    min_val = get_arg(ctx, 'min_val', pos=1, default=-1.0)
+    max_val = get_arg(ctx, 'max_val', pos=2, default=1.0)
+    output = ctx.method_return
 
+    layer = ctx.network.add_activation(input._trt, trt.ActivationType.CLIP)
+    layer.alpha = min_val
+    layer.beta = max_val
+
+    output._trt = layer.get_output(0)
+
+print(f"[Init] Loading PyTorch model from {INPUT_MODEL}...")
 # 1. Load Original Model
-model = resnet18()
-model.fc = nn.Linear(model.fc.in_features, NUM_CLASSES)
+model = MobileNetV2()
+model.classifier[1] = nn.Linear(1280, NUM_CLASSES)
+
 
 # Load weights (CPU first to be safe)
 checkpoint = torch.load(INPUT_MODEL, map_location='cpu')
+
 if 'state_dict' in checkpoint:
     model.load_state_dict(checkpoint['state_dict'])
 else:
