@@ -4,6 +4,7 @@
 PYTHON_CMD="../.venv/bin/python"
 DATA_DIR="../data/"
 GPU_ID=0
+SEED=42  # fixed seed for reproducibility
 
 # ==============================================================================
 # PARAMETERS GRID
@@ -85,6 +86,7 @@ for ARCH in "${ARCHITECTURES[@]}"; do
                     --epochs=$EPOCHS \
                     --arch=$ARCH \
                     --gpu=$GPU_ID \
+                    --seed=$SEED \
                     --workers=0 \
                     --pretrained
 
