@@ -250,19 +250,38 @@ func captureHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate filename
+	// 1. Decode raw bytes to OpenCV Mat to allow manipulation
+	img, err := gocv.IMDecode(data, gocv.IMReadColor)
+	if err != nil {
+		fmt.Printf("[Error] Failed to decode image for cropping: %v\n", err)
+		w.Write([]byte("Error Decoding"))
+		return
+	}
+	// Important: Free memory when function exits
+	defer img.Close()
+
+	// 2. Define the Center Region of Interest (ROI)
+	// We use the constants defined at the top of your file
+	// x: 48, y: 0, w: 224, h: 224
+	rect := image.Rect(OffsetCenter, 0, OffsetCenter+CropSize, CamHeight)
+
+	// Create a new Mat that points to that specific region
+	cropped := img.Region(rect)
+	defer cropped.Close()
+
+	// 3. Generate filename
 	files, _ := ioutil.ReadDir(DatasetDir)
 	id := len(files)
 	filename := fmt.Sprintf("%d.jpg", id)
 	path := filepath.Join(DatasetDir, filename)
 
-	// Save RAW data
-	if err := ioutil.WriteFile(path, data, 0644); err != nil {
+	// 4. Save the CROPPED image to disk
+	if success := gocv.IMWrite(path, cropped); !success {
 		w.Write([]byte("Error Saving"))
 		return
 	}
 
-	msg := fmt.Sprintf("Saved: %s", filename)
+	msg := fmt.Sprintf("Saved Center Crop: %s", filename)
 	fmt.Printf("[Photo] %s\n", msg)
 	w.Write([]byte(msg))
 }
