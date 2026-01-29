@@ -4,9 +4,16 @@ This repository contains code and resources for the project of GPU.
 
 This project has 2 use cases: 
 1. Go forward and stop when a target is detected.
-    ![video demo detection](02-jetson/demo-detection.mp4)
+
+    <video width="720" height="720" controls>
+        <source src="02-jetson/demo-detection.mp4" type="video/mp4">
+    </video>
+
 2. Follow the target
-    ![](02-jetson/demo-direction.mp4)
+
+    <video width="1028" height="720" controls>
+        <source src="02-jetson/demo-direction.mp4" type="video/mp4">
+    </video>
 
 ## Usage
 
