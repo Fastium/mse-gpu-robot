@@ -11,7 +11,7 @@ SPLIT_RATIOS = {"train": 0.80, "val": 0.20, "test": 0.0}
 
 
 def balance_data():
-    """Balances the number of images between cible and nocible by randomly removing excess images"""
+    """Balances the number of images between cible and nocible by selecting a subset of files without deletion"""
     cible_dir = os.path.join(DATA_DIR, "cible")
     nocible_dir = os.path.join(DATA_DIR, "nocible")
 
@@ -29,35 +29,30 @@ def balance_data():
     cible_count = len(cible_files)
     nocible_count = len(nocible_files)
 
-    print(f"Images before balancing: cible={cible_count}, nocible={nocible_count}")
+    print(f"Total images: cible={cible_count}, nocible={nocible_count}")
+
+    # Determine the minimum count for balancing
+    target_count = min(cible_count, nocible_count)
 
     if cible_count == nocible_count:
         print("Data is already balanced!")
-        return
+        return {"cible": cible_files, "nocible": nocible_files}
 
-    # Determine which folder has more images
+    # Randomly select files to use (without deleting)
+    random.shuffle(cible_files)
+    random.shuffle(nocible_files)
+
+    selected_cible = cible_files[:target_count]
+    selected_nocible = nocible_files[:target_count]
+
     if cible_count > nocible_count:
-        larger_dir = cible_dir
-        larger_files = cible_files
-        target_count = nocible_count
-        larger_name = "cible"
+        print(f"Using {target_count} out of {cible_count} images from 'cible' (skipping {cible_count - target_count})")
     else:
-        larger_dir = nocible_dir
-        larger_files = nocible_files
-        target_count = cible_count
-        larger_name = "nocible"
+        print(f"Using {target_count} out of {nocible_count} images from 'nocible' (skipping {nocible_count - target_count})")
 
-    # Randomly shuffle and select files to remove
-    random.shuffle(larger_files)
-    files_to_remove = larger_files[target_count:]
+    print(f"Balanced dataset: cible={len(selected_cible)}, nocible={len(selected_nocible)}")
 
-    # Remove excess files
-    for filename in files_to_remove:
-        file_path = os.path.join(larger_dir, filename)
-        os.remove(file_path)
-
-    print(f"Removed {len(files_to_remove)} images from '{larger_name}'")
-    print(f"Images after balancing: cible={target_count}, nocible={target_count}")
+    return {"cible": selected_cible, "nocible": selected_nocible}
 
 
 def create_directory_structure():
@@ -67,7 +62,7 @@ def create_directory_structure():
             os.makedirs(os.path.join(DATA_DIR, dest, source), exist_ok=True)
 
 
-def split_dataset():
+def split_dataset(selected_files):
     """Splits images between train/val/test according to defined ratios"""
     for source_dir in SOURCE_DIRS:
         full_source_dir = os.path.join(DATA_DIR, source_dir)
@@ -75,12 +70,11 @@ def split_dataset():
             print(f"Warning: Folder {full_source_dir} does not exist")
             continue
 
-        # Get all files
-        files = [
-            f
-            for f in os.listdir(full_source_dir)
-            if os.path.isfile(os.path.join(full_source_dir, f))
-        ]
+        # Use only the selected files (balanced subset)
+        files = selected_files.get(source_dir, [])
+        if not files:
+            print(f"Warning: No files selected for {source_dir}")
+            continue
 
         # Randomly shuffle
         random.shuffle(files)
@@ -117,12 +111,12 @@ if __name__ == "__main__":
     random.seed(42)  # For reproducibility
 
     print("Balancing data...")
-    balance_data()
+    selected_files = balance_data()
 
     print("\nCreating directory structure...")
     create_directory_structure()
 
-    print("Splitting dataset...")
-    split_dataset()
+    print("\nSplitting dataset...")
+    split_dataset(selected_files)
 
     print("\nDone!")
