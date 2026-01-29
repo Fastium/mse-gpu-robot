@@ -20,11 +20,13 @@ Copy the data (robot.zip) in the data folder and decompress it. Then run our scr
 ```bash
 python splitTrainTestVal.py
 ```
-It creates the folders `train/`, `test/` and `val/` with the corresponding images forf the training script.
+It creates the folders `train/` and `val/` with the corresponding images for the training script `trainCBI.py`.
 
-To train different models there is a bash script `train-model.sh` that produce all necessary files to get models in `.onnx` files. All models are saved in the `models/` folder.
+To train different models there is a bash script `train-model.sh` that produce all necessary files for evaluation and checkpoints. All models are saved in the `models/` folder.
 ```bash
-./00-training/train-model.sh
+cd 00-training
+./train-model.sh // multi model training
+./train-one-model.sh
 ```
 
 We can vizualize the training process with TensorBoard:
@@ -34,6 +36,10 @@ tensorboard --logdir=./models
 
 ## Local inference
 
+## Evaluation
+There is a jupyter notebook `metrics.ipynb` which produce every plots for batch of training. And there is a possibility to compare every batch training themselves.
+
+You have to place the saved models into a subfolder in `models/` which are the version to setup in the metrics scripts. It works like a filter to select which wave of training do you want to evaluate.
 
 ## Jetson inference
 
