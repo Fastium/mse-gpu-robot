@@ -11,6 +11,11 @@ https://github.com/user-attachments/assets/57dd2a84-03d8-436c-acc1-11463ad09c86
    
 https://github.com/user-attachments/assets/04f3c30a-22f6-43a1-8c0f-2d8a90ea91f9
 
+
+## Architecture
+
+![](03-presentation/diagrams/MachineLearningEmbarque.drawio.png)
+
 ## Usage
 
 Follow the next steps to set up the project:
