@@ -40,6 +40,11 @@ var (
 
 	// Channel to send processed images (with overlay) to the web stream
 	streamChannel = make(chan []byte, 1)
+
+	// Recording control
+	isRecording     = false
+	recordingMutex  sync.RWMutex
+	recordingSignal = make(chan bool, 1) // Signal to start/stop recording
 )
 
 // Data structure matches the JSON sent by Jetson
@@ -63,6 +68,19 @@ const PAGE = `
             background: white; opacity: 0; pointer-events: none; transition: opacity 0.1s;
         }
         #log { margin-top: 15px; color: #4CAF50; font-weight: bold; height: 20px; }
+        .controls { margin-top: 20px; }
+        button {
+            background: #333; color: #eee; border: 1px solid #555; padding: 10px 20px;
+            margin: 5px; cursor: pointer; font-size: 14px; border-radius: 4px;
+        }
+        button:hover { background: #444; }
+        button.active { background: #4CAF50; }
+        #recording-indicator {
+            display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+            background: #666; margin-left: 10px; vertical-align: middle;
+        }
+        #recording-indicator.active { background: #ff4444; animation: blink 0.5s infinite; }
+        @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0.5; } }
     </style>
 </head>
 <body>
@@ -73,7 +91,12 @@ const PAGE = `
         <div id="flash"></div>
         <img src="/video_feed" />
     </div>
-    <div id="log">Recording video... Ready.</div>
+    <div id="log">Ready.</div>
+
+    <div class="controls">
+        <button id="recordBtn" onclick="toggleRecording()">Start Recording</button>
+        <span id="recording-indicator"></span>
+    </div>
 
     <script>
         function capture() {
@@ -91,6 +114,42 @@ const PAGE = `
                 })
                 .catch(err => console.error(err));
         }
+
+        function toggleRecording() {
+            fetch('/toggle_recording')
+                .then(response => response.text())
+                .then(msg => {
+                    const log = document.getElementById('log');
+                    log.innerText = msg;
+                    log.style.opacity = 1;
+                    setTimeout(() => { log.style.opacity = 0.5; }, 2000);
+                    updateRecordingButton();
+                })
+                .catch(err => console.error(err));
+        }
+
+        function updateRecordingButton() {
+            fetch('/recording_status')
+                .then(response => response.json())
+                .then(data => {
+                    const btn = document.getElementById('recordBtn');
+                    const indicator = document.getElementById('recording-indicator');
+                    if (data.recording) {
+                        btn.innerText = 'Stop Recording';
+                        btn.classList.add('active');
+                        indicator.classList.add('active');
+                    } else {
+                        btn.innerText = 'Start Recording';
+                        btn.classList.remove('active');
+                        indicator.classList.remove('active');
+                    }
+                })
+                .catch(err => console.error(err));
+        }
+
+        // Check recording status on page load and update periodically
+        updateRecordingButton();
+        setInterval(updateRecordingButton, 500);
 
         document.addEventListener('keydown', function(event) {
             if (event.code === 'Space') {
@@ -116,6 +175,8 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(PAGE)) })
 	http.HandleFunc("/video_feed", streamHandler)
 	http.HandleFunc("/capture_trigger", captureHandler)
+	http.HandleFunc("/toggle_recording", toggleRecordingHandler)
+	http.HandleFunc("/recording_status", recordingStatusHandler)
 
 	fmt.Println("[System] Collector running on :5000")
 	fmt.Printf("[Info]  Photos -> '%s/'\n", DatasetDir)
@@ -134,18 +195,8 @@ func zmqLoop() {
 	socket.SetSubscribe("")
 	socket.SetConflate(true)
 
-	// Setup Video Writer (Using OpenCV - Real AVI)
-	timestamp := time.Now().Format("20060102_150405")
-	filename := fmt.Sprintf("recording_%s.avi", timestamp)
-
-	// MJPG is a safe bet for AVI container without complex codec installs
-	writer, err := gocv.VideoWriterFile(filename, "MJPG", 20, CamWidth, CamHeight, true)
-	if err != nil {
-		fmt.Printf("[Error] Could not open video writer: %v\n", err)
-	} else {
-		fmt.Printf("[Record] Saving video to %s\n", filename)
-		defer writer.Close()
-	}
+	var writer *gocv.VideoWriter
+	var recordingStartTime time.Time
 
 	offsets := map[string]int{
 		"left":   OffsetLeft,
@@ -153,7 +204,41 @@ func zmqLoop() {
 		"right":  OffsetRight,
 	}
 
+	// Signal initial state
+	recordingSignal <- false
+
 	for {
+		// Check for recording state change
+		select {
+		case shouldRecord := <-recordingSignal:
+			recordingMutex.Lock()
+			isRecording = shouldRecord
+			recordingMutex.Unlock()
+
+			if shouldRecord {
+				// Start recording
+				timestamp := time.Now().Format("20060102_150405")
+				filename := fmt.Sprintf("recording_%s.avi", timestamp)
+				recordingStartTime = time.Now()
+
+				var err error
+				writer, err = gocv.VideoWriterFile(filename, "MJPG", 20, CamWidth, CamHeight, true)
+				if err != nil {
+					fmt.Printf("[Error] Could not open video writer: %v\n", err)
+				} else {
+					fmt.Printf("[Record] Started recording to %s\n", filename)
+				}
+			} else {
+				// Stop recording
+				if writer != nil && writer.IsOpened() {
+					writer.Close()
+					duration := time.Since(recordingStartTime).Round(time.Second)
+					fmt.Printf("[Record] Stopped recording (duration: %v)\n", duration)
+				}
+			}
+		default:
+		}
+
 		msg, err := socket.Recv(0)
 		if err != nil {
 			continue
@@ -221,10 +306,12 @@ func zmqLoop() {
 		fpsText := fmt.Sprintf("FPS:%.1f", data.FPS)
 		gocv.PutText(&img, fpsText, image.Pt(CamWidth-74, 15), gocv.FontHersheySimplex, 0.4, color.RGBA{200, 200, 200, 0}, 1)
 
-		// 3. Write Frame to Video File
-		if writer.IsOpened() {
+		// 3. Write Frame to Video File (only if recording)
+		recordingMutex.RLock()
+		if isRecording && writer != nil && writer.IsOpened() {
 			writer.Write(img)
 		}
+		recordingMutex.RUnlock()
 
 		// 4. Encode to JPEG for Web Stream
 		buf, _ := gocv.IMEncode(".jpg", img)
@@ -291,4 +378,34 @@ func streamHandler(w http.ResponseWriter, r *http.Request) {
 	for jpgData := range streamChannel {
 		fmt.Fprintf(w, "--frame\r\nContent-Type: image/jpeg\r\n\r\n%s\r\n", jpgData)
 	}
+}
+
+func toggleRecordingHandler(w http.ResponseWriter, r *http.Request) {
+	recordingMutex.Lock()
+	defer recordingMutex.Unlock()
+
+	newState := !isRecording
+	select {
+	case recordingSignal <- newState:
+	default:
+	}
+
+	var msg string
+	if newState {
+		msg = "Recording started"
+		fmt.Println("[Record] Recording started via web interface")
+	} else {
+		msg = "Recording stopped"
+		fmt.Println("[Record] Recording stopped via web interface")
+	}
+	w.Write([]byte(msg))
+}
+
+func recordingStatusHandler(w http.ResponseWriter, r *http.Request) {
+	recordingMutex.RLock()
+	status := isRecording
+	recordingMutex.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"recording": status})
 }
