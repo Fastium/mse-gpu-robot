@@ -6,50 +6,47 @@ import cv2
 import torch
 import torchvision.transforms as transforms
 import argparse
-from torchvision.models import mobilenet_v2
-import torch.nn as nn
+# --- NEW: Import torch2trt wrapper ---
+from torch2trt import TRTModule 
 
 # --- CONFIGURATION ---
 ZMQ_PORT = 5555
-# INPUT: Use the ORIGINAL weights, not the TRT engine from Jetson
-MODEL_PATH = "../models/w11-mobilenet_v2_b16_lr0.001_e40.pth.tar" 
-NUM_CLASSES = 2
+# INPUT: Point to your TensorRT optimized model for PC (RTX 4070)
+MODEL_PATH = "../models/w11-mobilenet_v2_b16_lr0.001_e40-trt-4070.pth" 
 
 # Emulate Jetson Camera Specs
 CAM_WIDTH = 320
 CAM_HEIGHT = 224
 MODEL_INPUT_SIZE = 224
 
-# Select Device (PC might not have CUDA, use CPU if needed)
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# TensorRT REQUIRES CUDA
+DEVICE = torch.device("cuda")
 
-print(f"[Init] Running simulation on: {DEVICE}")
+print(f"[Init] Running TRT Simulation on: {DEVICE}")
 
 def get_model():
-    print(f"[Model] Loading Standard PyTorch Model from {MODEL_PATH}...")
+    print(f"[Model] Loading TensorRT Engine from {MODEL_PATH}...")
     
-    # Re-instantiate the architecture (Must match training)
-    model = mobilenet_v2()
-    # Replace classifier head for 2 classes
-    model.classifier[1] = nn.Linear(1280, NUM_CLASSES)
+    # 1. Initialize the TRT Module wrapper
+    # Unlike standard PyTorch, we don't need to define the architecture (MobileNet)
+    # The engine contains the graph definition.
+    model_trt = TRTModule()
 
-    # Load weights
+    # 2. Load the compiled engine weights
     try:
-        checkpoint = torch.load(MODEL_PATH, map_location=DEVICE)
-        if 'state_dict' in checkpoint:
-            model.load_state_dict(checkpoint['state_dict'])
-        else:
-            model.load_state_dict(checkpoint)
+        model_trt.load_state_dict(torch.load(MODEL_PATH))
     except Exception as e:
-        print(f"[Error] Could not load weights: {e}")
-        print("Make sure you are using the original .pth file, not the _trt.pth one!")
+        print(f"[Error] Could not load TRT engine: {e}")
+        print("Ensure you are using the converted TRT model (not the original .pth)!")
         sys.exit(1)
 
-    model = model.to(DEVICE).eval()
-    print(f"[Model] Model loaded.")
-    return model
+    # No need for .to(DEVICE) or .eval(), TRTModule handles this, 
+    # but good practice to ensure consistency if wrapper changes.
+    print(f"[Model] Engine loaded on GPU.")
+    return model_trt
 
 def get_transform():
+    # Standard Preprocessing (Must match training/conversion)
     return transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
@@ -58,7 +55,7 @@ def get_transform():
 
 def main():
     # Parse Arguments
-    parser = argparse.ArgumentParser(description='PC Vision Server Simulation')
+    parser = argparse.ArgumentParser(description='PC Vision Server (TensorRT)')
     parser.add_argument('--input', type=str, default='0', help='Camera ID (0) or Video File path (demo.mp4)')
     parser.add_argument('--mirror', action='store_true', help='Activate mirror mode for webcam')
     args = parser.parse_args()
@@ -84,11 +81,11 @@ def main():
         print("[Error] Could not open video source.")
         return
 
-    # 3. Load Model
+    # 3. Load TRT Model
     model = get_model()
     preprocess = get_transform()
 
-    print("[System] Starting Loop...")
+    print("[System] Starting TRT Inference Loop...")
 
     last_time = time.time()
 
@@ -115,8 +112,6 @@ def main():
                     break
 
             # --- RESIZE TO JETSON RESOLUTION ---
-            # PC Webcams are usually 640x480 or 720p. 
-            # We must resize to 320x224 to match the Jetson's perspective exactly.
             image = cv2.resize(frame, (CAM_WIDTH, CAM_HEIGHT))
 
             # Flip for mirror effect
@@ -130,8 +125,6 @@ def main():
             fps = 1.0 / dt if dt > 0 else 0
 
             # --- PREP CROPS ---
-            # Standard PyTorch usually expects BGR -> RGB conversion if trained with PIL
-            # OpenCV gives BGR.
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             
             # Prepare batch
@@ -151,11 +144,16 @@ def main():
             probs_map = {}
             keys = ["left", "center", "right"]
 
-            with torch.no_grad(): # Essential for inference performance
-                for i, input_tensor in enumerate(tensors):
-                    output = model(input_tensor)
-                    prob = torch.nn.functional.softmax(output, dim=1).cpu().numpy()[0][0] 
-                    probs_map[keys[i]] = float(prob)
+            # TRT Inference
+            # Note: Depending on how you converted the model (batch size), 
+            # you might be able to batch these 3 inputs into one tensor [3, 3, 224, 224].
+            # Here we keep sequential inference for safety and simplicity.
+            for i, input_tensor in enumerate(tensors):
+                output = model(input_tensor)
+                
+                # Get probability
+                prob = torch.nn.functional.softmax(output, dim=1).cpu().numpy()[0][0] 
+                probs_map[keys[i]] = float(prob)
 
             # --- PUBLISH ---
             # Encode for Viewer
