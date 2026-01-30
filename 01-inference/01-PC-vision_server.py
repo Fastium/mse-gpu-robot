@@ -60,6 +60,7 @@ def main():
     # Parse Arguments
     parser = argparse.ArgumentParser(description='PC Vision Server Simulation')
     parser.add_argument('--input', type=str, default='0', help='Camera ID (0) or Video File path (demo.mp4)')
+    parser.add_argument('--mirror', action='store_true', help='Activate mirror mode for webcam')
     args = parser.parse_args()
 
     # 1. Setup ZMQ
@@ -119,7 +120,8 @@ def main():
             image = cv2.resize(frame, (CAM_WIDTH, CAM_HEIGHT))
 
             # Flip for mirror effect
-            image = cv2.flip(image, 1)
+            if args.mirror:
+                image = cv2.flip(image, 1)
 
             # --- FPS CALC ---
             curr_time = time.time()
