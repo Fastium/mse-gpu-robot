@@ -1,6 +1,6 @@
 #import "style/slide.typ": *
 
-#let HANDOUT = false
+#let HANDOUT = true
 
 #show: metropolis-theme.with(
   aspect-ratio: "16-9",
@@ -15,7 +15,7 @@
   ..get-config(),
   config-common(
     handout: HANDOUT,
-    // show-notes-on-second-screen: if HANDOUT {none} else {right}
+    show-notes-on-second-screen: if HANDOUT {none} else {right}
   )
 )
 
@@ -32,14 +32,13 @@
 
 == Dataset
 
-taking a picture with the robot through PC-webviewer.go and with personal camera
-#grid(
+taking a picture with personal camera and with the robot every five seconds through PC-webviewer.go 
+ #grid(
     columns: (1fr, 1fr, 1fr),
   align: center,
+  image("img/Image_2025_0005_293_cible.JPG"),
   image("img/Image_2025_0005_105_cible.jpg"),
-  image("img/Image_2025_0005_215_nocible.jpg"),
-  image("img/Image_2025_0005_293_cible.JPG")
-  
+  image("img/Image_2025_0005_215_nocible.jpg") 
 )
 
 
@@ -49,7 +48,7 @@ taking a picture with the robot through PC-webviewer.go and with personal camera
 #image("diagrams/highrespic.drawio.png")
 
 
-== Best model
+== Strategy
 
 
   #grid(
@@ -93,15 +92,26 @@ taking a picture with the robot through PC-webviewer.go and with personal camera
 //   [Loss BCE], [Probability (Quantity)], [Minimize]
 // )
 
-
+== Model variations
 
 // 8 graphe wave01
 #image("res/results-wave01.png")
 
-#align(center + horizon)[
-  #image("res/global-comparison.png")  
-]
+== Example
 
+#align(center + horizon)[
+  #table(
+    columns: (2fr, 1fr),
+    align: horizon + center,
+    stroke: none,
+
+    [#image("res/global-comparison.png", height: 330pt)  ],
+    [- delete data]
+  )
+  
+  
+]
+== Best Model
 
 // tableau best model
 #table(
